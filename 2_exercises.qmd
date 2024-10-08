@@ -1,11 +1,12 @@
 ---
 title: "Chapter 2: Exercises"
 format: html
+editor_options: 
+  chunk_output_type: console
 ---
 
 ```{r}
 library(tidyverse)
-library(ISLR2)
 ```
 
 ## Conceptual
@@ -158,6 +159,8 @@ d)  If the Bayes decision boundary in this problem is highly non-linear, then wo
     -   **Small:** If the Bayes decision boundary is highly non-linear, a small value of $K$ allows for a more flexible model that can capture the non-linear patterns in the data. A larger $K$ would result in a smoother decision boundary, which can approximate a linear boundary in some cases, but would fail the non-linear boundary in this case.
 
 ```{r}
+#| label: q7
+
 q7 = tibble(
   x1 = c(0, 2, 0, 0,-1, 1),
   x2 = c(3, 0, 1, 1, 0, 1),
@@ -193,29 +196,26 @@ q7 |>
 
 ### Question 8
 
-This exercise relates to the `College` data set, which can be found in the file `College.csv` on the book website. It contains a number of variables for 777 different universities and colleges in the US. The variables are:
-
--   `Private` : Public/private indicator
--   `Apps` : Number of applications received
--   `Accept` : Number of applicants accepted
--   `Enroll` : Number of new students enrolled
--   `Top10perc` : New students from top 10 % of high school class
--   `Top25perc` : New students from top 25 % of high school class
--   `F.Undergrad` : Number of full-time undergraduates
--   `P.Undergrad` : Number of part-time undergraduates
--   `Outstate` : Out-of-state tuition
--   `Room.Board` : Room and board costs
--   `Books` : Estimated book costs
--   `Personal` : Estimated personal spending
--   `PhD` : Percent of faculty with Ph.D.’s
--   `Terminal` : Percent of faculty with terminal degree
--   `S.F.Ratio` : Student/faculty ratio
--   `perc.alumni` : Percent of alumni who donate
--   `Expend` : Instructional expenditure per student
--   `Grad.Rate` : Graduation rate
+This exercise relates to the `College` data set, which can be found in the file `College.csv` on the book website. It contains a number of variables for 777 different universities and colleges in the US.
 
 a)  Use the `read.csv()` function to read the data in `R`. Call the loaded data `college`. Make sure that you have the directory set to the correct location for the data.
+
+```{r}
+#| label: q8-a
+
+college = ISLR2::College
+```
+
 b)  Look at the data using the `View()` function. You should notice that the first column is just the name of each university. We don't really want `R` to treat this as data. However, it may be handy to have these names for later. Try the following command: `rownames(college <- college[, 1])`. you should see that there is now a `row.names` column with the name of each university recorded. This means that `R` has given each row a name corresponding to the appropriate university. `R` will not try to perform calculations on the row names. However, we still need to eliminate the first column in the data where the names are stored. Try: `college <- college[, -1]`. Now you should see that the first column is `Private`. Note that another column labeled `row.names` now appears before the `Private` column. However, this is not a data column, but rather a the name that `R` is giving to each row.
+
+```{r}
+#| label: q8-b
+
+View(college)
+college = as_tibble(ISLR2::College, rownames = "college") |> 
+  janitor::clean_names()
+```
+
 c)  This is multi-part:
     i.  Use the `summary()` function to produce a numerical summary of the variables in the data set.
     ii. Use the `pairs()` function to produce a scatterplot matrix of the first ten columns or variables of the data. Recall that you can reference the first ten columns of a matrix `A` using `A[,1:10]`.
@@ -225,42 +225,323 @@ c)  This is multi-part:
     vi. Continue exploring the data, and provide a brief summary of what you discover.
 
 ```{r}
-#| label: base-r
+#| label: q8-c
 
-# a)
-college = read.csv("data/College.csv")
-
-# b)
-rownames(college) = college[, 1]
-college = college[, -1]
-
-# c)
-# i.
+# i
 summary(college)
+skimr::skim(college)
 
-# ii.
-college$Private = college$Private == "Yes"
-pairs(x = college[, 1:10])
+# ii
+college |> 
+  mutate(private = if_else(TRUE, 1, 0)) |> 
+  select(where(is.numeric)) |> 
+  select(1:10) |>  
+  GGally::ggpairs(lower = list(continuous = "smooth"))
 
-# iii.
-plot(
-  college$Outstate ~ factor(college$Private), 
-  xlab = "Private", 
-  ylab = "Outstate"
-)
+# iii
+college |>
+  ggplot(aes(outstate, private)) +
+  geom_boxplot()
 
-# iv.
-college$Elite = factor(ifelse(college$Top10perc > 50, "Yes", "No"))
-summary(college$Elite)
+# iv
+college = college |> 
+  mutate(
+    elite = fct(
+      if_else(top10perc > 50, "Yes", "No"), 
+      levels = c("Yes", "No")
+    )
+  )
 
-# v.
-par(mfrow = c(2,2))
-for (n in c(5, 10, 20, 50)) {
-  hist(college$Enroll, breaks = n, main = paste("n =", n), xlab = "Enroll")
+summary(college) # Elite; Yes: 78, No: 699
+
+college |>
+  ggplot(aes(outstate, elite)) +
+  geom_boxplot()
+
+# v
+multi_hist = function(var, bins) {
+  plot = college |>
+    ggplot(aes(x = !!sym(var))) +
+    geom_histogram(bins = bins) +
+    labs(title = str_c("Histogram of ", var, " with ", bins, " bins")) +
+    theme_minimal()
+  
+  print(plot)
 }
 
-# vi.
-chisq.test(college$Private, college$Elite)
+crossing(
+  var = college |> select(apps, outstate, books) |> names(),
+  bins = c(5, 10, 15, 20)
+) |> 
+  pwalk(multi_hist)
+
+# vi
+college |> 
+  ggplot(aes(grad_rate, elite)) +
+  geom_boxplot()
+
+# It seems on the surface the "elite" university students are better at graduating 
+
+college |> 
+  filter(grad_rate > 100) |> 
+  select(college, grad_rate)
+
+# Cazenovia College might need to get better at math
 ```
 
-Whether a college is Private and Elite is not random!
+### Question 9
+
+This exercise involves the `Auto` data set studied in the lab. Make sure that the missing values have been removed from the data.
+
+a)  Which of the predictors are quantitative, and which are qualitative?
+
+```{r}
+#| label: q9-a
+
+auto = as_tibble(ISLR2::Auto) |> 
+  filter(!if_any(everything(), is.na)) |> 
+  mutate(
+    cylinders = as_factor(cylinders),
+    year = ym(str_c("19", year, "-01")),
+    origin = origin |> 
+      case_match(
+        1 ~ "American",
+        2 ~ "European",
+        3 ~ "Japanese"
+      ) |> 
+      fct()
+  )
+
+auto |> 
+  select(where(is.numeric)) |> 
+  names() |> 
+  as_tibble_col("quantitative") |> 
+  print()
+
+auto |> 
+  select(!where(is.numeric)) |> 
+  names() |> 
+  as_tibble_col("qualitative") |> 
+  print()
+```
+
+b)  What is the range of each quantitative predictor? You can answer this using the `range()` function.
+
+```{r}
+#| label: q9-b
+
+auto |> 
+  select(where(is.numeric)) |> 
+  map(range)
+```
+
+c)  What is the mean and standard deviation of each quantitative predictor?
+
+```{r}
+#| label: q9-c
+
+auto |> 
+  select(where(is.numeric)) |> 
+  map(\(col) list(mean = mean(col), sd = sd(col)))
+```
+
+d)  Now remove the 10th through 85th observations. What is the range, mean, and standard deviation of each predictor in the subset of the data that remains?
+
+```{r}
+#| label: q9-d
+
+auto |> 
+  select(where(is.numeric)) |> 
+  mutate(row_number = row_number()) |> 
+  slice(-(10:85)) |> 
+  map(\(col) list(range = range(col), mean = mean(col), sd = sd(col)))
+```
+
+e)  Using the full data set, investigate the predictors graphically, using scatterplots or other tools of your choice. Create some plots highlighting the relationships among the predictors. Comment on your findings.
+
+```{r}
+#| label: q9-e
+
+auto |> 
+  select(-name) |> 
+  GGally::ggpairs()
+```
+
+-   There is a strong negative correlation between `mpg` and `displacement`, `horsepower`, & `weight`
+-   American cars tend to be much bigger than European and Japanese, probably due to the popularity of trucks, which is supported by the higher displacement and horsepower of American cars. This intern gives American cars the worst `mpg`.
+-   `acceleration` has a relatively normal distribution across all vehicles.
+
+f)  Suppose that we wish to predict gas mileage, `mpg`, on the basis of the other variables. Do you plots suggest that any of the other variables might be useful in predicting `mpg`? Justify your answer.
+    -   **Yes**.
+    -   As stated above, there is a strong negative correlation between `mpg` and `displacement`, `horsepower`, & `weight`.
+    -   American cars on average have far lower `mpg` than Japanese or European cars.
+
+### Question 10
+
+This exercise involves the `Boston` housing data set.
+
+a.  To being, load the `Boston` data set. How many rows are in this data set? How many columns? What do the rows and columns represent?
+
+```{r}
+#| label: q10-a
+
+boston = as_tibble(ISLR2::Boston) |> 
+  mutate(
+    chas = if_else(chas == 1, TRUE, FALSE),
+    rad = as_factor(rad)
+  )
+
+nrow(boston) # 506 rows
+ncol(boston) # 13 cols
+```
+
+This table represents 506 different suburbs in Boston, with each column representing a different feature or statistic about the suburb.
+
+b.  Make some pairwise scatterplots of the predictors (columns) in this data set. Describe your findings.
+
+```{r}
+#| label: q10-b
+
+boston |> 
+  GGally::ggpairs()
+```
+
+-   There is a strong positive correlation between `rm` and `medv`
+-   `rm` has a strong normal distribution
+-   `indus` and `tax` seem to be bi-modal
+-   `medv` has a normal distribution around but is skewed right.
+-   `rad` = 25 has much higher `crim` values than any other `rad` values
+
+c.  Are any of the predictors associated with per capita crime rate? If so, explain the relationship.
+
+```{r}
+#| label: q10-c
+
+boston |> 
+  select(-crim) |> 
+  names() |> 
+  walk(\(col) {
+    plot = boston |> 
+      ggplot(aes(!!sym(col), crim)) +
+      geom_point(alpha = 0.5) +
+      geom_smooth() +
+      labs(title = str_c("crim vs ", col))
+    
+    print(plot)
+  })
+```
+
+-   `medv` < 20 seems to indicate higher crime, with also a jump at `medv` == 50
+-   `rad` == 24 is a strong indicator of crime
+-   relative closeness to employment centers, `dis` < 3, is an indicator
+-   `chas` value, aka touching the Chase river or not is a strong indicator
+-   Very low `zn` is a strong indicator of high crime
+
+d.  Do any of the census tracts of Boston appear to have particularly high crime rates? Tax rates? Pupil-teacher ratios? Comment on the range of each predictor.
+
+```{r}
+#| label: q10-d
+
+deciles = as_factor(names(quantile(boston$tax, probs = seq(0, 1, 1/10))))
+
+# ---
+
+quantile(boston$crim, probs = seq(0, 1, 1/10)) 
+range(boston$crim)
+
+ggplot(data = tibble(
+  value = quantile(boston$crim, probs = seq(0, 1, 1/10)),
+  decile = deciles
+)) + 
+  geom_col(aes(decile, value))
+# The top 10% of high crime areas have almost 8X the crime rate as the bottom 90%. 
+# Very high range of [0.00632, 88.97620]
+
+# ---
+quantile(boston$tax, probs = seq(0, 1, 1/10)) 
+range(boston$tax)
+
+ggplot(data = tibble(
+  value = quantile(boston$tax, probs = seq(0, 1, 1/10)),
+  decile = deciles
+)) + 
+  geom_col(aes(decile, value))
+# Taxes seem to increase linearly until the 80% decile where there is a big jump
+# Big range of [187, 711]
+
+# ---
+quantile(boston$ptratio, probs = seq(0, 1, 1/10)) 
+range(boston$ptratio)
+
+ggplot(data = tibble(
+  value = quantile(boston$ptratio, probs = seq(0, 1, 1/10)),
+  decile = deciles
+)) + 
+  geom_col(aes(decile, value))
+# The bottom 50% have a high range of values, 13 to 19, where the top 50% center around 20-22
+# Modest range of [12.6, 22.0]
+```
+
+e.  How many of the census tracts in this data set bound the Charles river?
+
+```{r}
+#| label: q10-e
+
+boston |> count(chas) # 35
+```
+
+f.  What is the median pupil-teacher ratio among the towns in this data set?
+
+```{r}
+#| label: q10-f
+
+median(boston$ptratio) # 19.05
+```
+
+g.  Which census tract of Boston has the lowest median value of owner-occupied homes? What are the values of the other predictors for that census tract, and how do those values compare to the overall ranges for those predictors? Comment on your findings.
+
+```{r}
+#| label: q10-g
+
+boston |> 
+  mutate(row = row_number(), .before = 1) |> 
+  slice_min(medv, n = 1, with_ties = FALSE)
+
+ranges = boston |> 
+  slice(-399) |> 
+  select(-medv) |> 
+  select(where(is.numeric)) |> 
+  map(\(col) tibble(min = min(col), max = max(col))) |> 
+  imap(\(x, idx) x |> mutate(name = idx)) |> 
+  list_rbind()
+
+lowest = boston |> 
+  slice_min(medv, n = 1, with_ties = FALSE) |> 
+  select(-medv) |> 
+  select(where(is.numeric)) |> 
+  pivot_longer(
+    cols = everything(), 
+    values_to = "lowest_medv",
+    names_to = "name")
+
+ranges |> 
+  left_join(lowest, join_by(name)) |> 
+  select(name, min, lowest_medv, max)
+```
+
+-   For `zn` & `dis`, the census tract was almost identical to the minimum.
+-   For `age`, `tax`, `ptratio`, & `lstat`, the census track was much closer to the maximums.
+-   For `crim`, `indus`, & `nox`, the census track is in the middle.
+
+h.  In this data set, how many of the census tracts average more than seven rooms per dwelling? More than eight rooms per dwelling? Comment on the census tracts that average more than eight rooms per dwelling.
+
+```{r}
+#| label: q10-h
+
+boston |> filter(rm > 7) |> nrow() # 64
+boston |> filter(rm > 8) |> nrow() # 13
+
+boston |> filter(rm > 8)
+```
+
+The census tracks with more than eight rooms per dwelling on average have very low crime rates.
